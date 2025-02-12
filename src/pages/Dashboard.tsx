@@ -1,4 +1,3 @@
-
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -8,10 +7,69 @@ import { supabase } from "@/integrations/supabase/client";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const Dashboard = () => {
-  const [time, setTime] = useState(25 * 60); // 25 minutes in seconds
+  const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [userStats, setUserStats] = useState<any>(null);
+  const [pomodoroRoom, setPomodoroRoom] = useState<any>(null);
+  const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
   const { toast } = useToast();
+
+  // Fetch pomodoro room data
+  useEffect(() => {
+    const fetchPomodoroRoom = async () => {
+      const { data: room, error } = await supabase
+        .from('pomodoro_rooms')
+        .select('*')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching pomodoro room:', error);
+        return;
+      }
+
+      if (room) {
+        setPomodoroRoom(room);
+        // Extract connected users from user_data
+        const users = Object.values(room.user_data || {});
+        setConnectedUsers(users);
+        
+        // Calculate remaining time
+        const startedAt = new Date(room.started_at).getTime();
+        const currentTime = new Date().getTime();
+        const elapsedSeconds = Math.floor((currentTime - startedAt) / 1000);
+        const sessionLength = room.is_break ? room.break_time : room.session_time;
+        const remainingTime = Math.max(0, sessionLength - elapsedSeconds);
+        
+        setTime(remainingTime);
+        setIsRunning(true);
+      }
+    };
+
+    fetchPomodoroRoom();
+  }, []);
+
+  // Sync timer with server
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (pomodoroRoom && isRunning && time > 0) {
+      interval = setInterval(() => {
+        setTime((prevTime) => {
+          const newTime = prevTime - 1;
+          if (newTime === 0) {
+            toast({
+              title: pomodoroRoom.is_break ? "Break time's up!" : "Time's up!",
+              description: pomodoroRoom.is_break ? "Time to focus!" : "Take a break!",
+            });
+            setIsRunning(false);
+          }
+          return newTime;
+        });
+      }, 1000);
+    }
+
+    return () => clearInterval(interval);
+  }, [isRunning, time, toast, pomodoroRoom]);
 
   useEffect(() => {
     const fetchUserStats = async () => {
@@ -55,24 +113,6 @@ const Dashboard = () => {
     { day: 'Sun', hours: (userStats?.daily_voice_time || 0) / 3600 },
   ];
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (isRunning && time > 0) {
-      interval = setInterval(() => {
-        setTime((prevTime) => prevTime - 1);
-      }, 1000);
-    } else if (time === 0) {
-      toast({
-        title: "Time's up!",
-        description: "Great job! Take a break.",
-      });
-      setIsRunning(false);
-    }
-
-    return () => clearInterval(interval);
-  }, [isRunning, time, toast]);
-
   const formatTime = (timeInSeconds: number) => {
     const minutes = Math.floor(timeInSeconds / 60);
     const seconds = timeInSeconds % 60;
@@ -83,11 +123,17 @@ const Dashboard = () => {
 
   const toggleTimer = () => setIsRunning(!isRunning);
   const resetTimer = () => {
-    setTime(25 * 60);
+    const sessionLength = pomodoroRoom?.is_break ? 
+      pomodoroRoom.break_time : 
+      pomodoroRoom.session_time;
+    setTime(sessionLength || 25 * 60);
     setIsRunning(false);
   };
 
-  const progress = ((25 * 60 - time) / (25 * 60)) * 283;
+  const progress = pomodoroRoom ? 
+    ((pomodoroRoom.is_break ? pomodoroRoom.break_time : pomodoroRoom.session_time) - time) / 
+    (pomodoroRoom.is_break ? pomodoroRoom.break_time : pomodoroRoom.session_time) * 283 : 
+    0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
@@ -215,12 +261,12 @@ const Dashboard = () => {
               Connected Users
             </p>
             <div className="flex justify-center -space-x-2 overflow-hidden py-4">
-              {[1, 2, 3].map((i) => (
+              {connectedUsers.map((user: any, i: number) => (
                 <div
                   key={i}
                   className="inline-block h-10 w-10 rounded-full ring-2 ring-background"
                   style={{
-                    backgroundImage: `url(https://api.dicebear.com/7.x/avataaars/svg?seed=${i})`,
+                    backgroundImage: `url(${user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${i}`})`,
                     backgroundSize: "cover",
                   }}
                 />
