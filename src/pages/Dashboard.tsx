@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const Dashboard = () => {
-  const [time, setTime] = useState(25 * 60);
+  const [time, setTime] = useState(25 * 60); // 25 minutes in seconds
   const [isRunning, setIsRunning] = useState(false);
   const [userStats, setUserStats] = useState<any>(null);
   const { toast } = useToast();
@@ -18,7 +18,7 @@ const Dashboard = () => {
       const { data: stats, error } = await supabase
         .from('user_stats')
         .select('*')
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching user stats:', error);
@@ -38,20 +38,21 @@ const Dashboard = () => {
     ((userStats.weekly_voice_time - userStats.previous_weekly_voice_time) / 
     (userStats.previous_weekly_voice_time || 1)) * 100 : 0;
 
-  // Convert minutes to hours for display
-  const formatHours = (minutes: number) => {
-    return `${(minutes / 60).toFixed(1)}h`;
+  // Convert seconds to hours for display
+  const formatHours = (seconds: number) => {
+    const hours = seconds / 3600; // Convert seconds to hours
+    return `${hours.toFixed(1)}h`;
   };
 
-  // Mock data for the area chart (you would replace this with real daily data)
+  // Convert daily voice time from seconds to hours for the chart
   const chartData = [
-    { day: 'Mon', hours: userStats?.daily_voice_time || 0 },
-    { day: 'Tue', hours: (userStats?.daily_voice_time || 0) * 0.8 },
-    { day: 'Wed', hours: (userStats?.daily_voice_time || 0) * 1.2 },
-    { day: 'Thu', hours: (userStats?.daily_voice_time || 0) * 0.9 },
-    { day: 'Fri', hours: (userStats?.daily_voice_time || 0) * 1.1 },
-    { day: 'Sat', hours: (userStats?.daily_voice_time || 0) * 0.7 },
-    { day: 'Sun', hours: userStats?.daily_voice_time || 0 },
+    { day: 'Mon', hours: (userStats?.daily_voice_time || 0) / 3600 },
+    { day: 'Tue', hours: ((userStats?.daily_voice_time || 0) * 0.8) / 3600 },
+    { day: 'Wed', hours: ((userStats?.daily_voice_time || 0) * 1.2) / 3600 },
+    { day: 'Thu', hours: ((userStats?.daily_voice_time || 0) * 0.9) / 3600 },
+    { day: 'Fri', hours: ((userStats?.daily_voice_time || 0) * 1.1) / 3600 },
+    { day: 'Sat', hours: ((userStats?.daily_voice_time || 0) * 0.7) / 3600 },
+    { day: 'Sun', hours: (userStats?.daily_voice_time || 0) / 3600 },
   ];
 
   useEffect(() => {
