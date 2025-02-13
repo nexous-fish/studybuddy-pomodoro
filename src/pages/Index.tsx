@@ -3,20 +3,38 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const signInWithDiscord = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: {
         scopes: 'identify email',
+        redirectTo: window.location.origin,
       },
     });
 
     if (error) {
       console.error('Error signing in with Discord:', error.message);
+      
+      // Show a user-friendly error message
+      if (error.message?.includes('rate limit') || error.message?.includes('Unable to exchange external code')) {
+        toast({
+          title: "Too many login attempts",
+          description: "Please wait a few minutes before trying again.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Authentication error",
+          description: "There was a problem signing in with Discord. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
