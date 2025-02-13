@@ -41,6 +41,7 @@ export type Database = {
           break_time: number
           force_video: boolean | null
           is_break: boolean | null
+          last_session_started: string | null
           room_id: number
           session_time: number
           started_at: string
@@ -50,6 +51,7 @@ export type Database = {
           break_time: number
           force_video?: boolean | null
           is_break?: boolean | null
+          last_session_started?: string | null
           room_id: number
           session_time: number
           started_at: string
@@ -59,6 +61,7 @@ export type Database = {
           break_time?: number
           force_video?: boolean | null
           is_break?: boolean | null
+          last_session_started?: string | null
           room_id?: number
           session_time?: number
           started_at?: string

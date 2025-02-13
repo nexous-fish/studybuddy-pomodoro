@@ -14,7 +14,7 @@ const Dashboard = () => {
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
   const { toast } = useToast();
 
-  // Fetch pomodoro room data
+  // Fetch pomodoro room data and initialize timer
   useEffect(() => {
     const fetchPomodoroRoom = async () => {
       const { data: room, error } = await supabase
@@ -33,19 +33,47 @@ const Dashboard = () => {
         const users = Object.values(room.user_data || {});
         setConnectedUsers(users);
         
-        // Calculate remaining time
-        const startedAt = new Date(room.started_at).getTime();
+        // Calculate remaining time based on last_session_started
+        const lastSessionStarted = new Date(room.last_session_started).getTime();
         const currentTime = new Date().getTime();
-        const elapsedSeconds = Math.floor((currentTime - startedAt) / 1000);
-        const sessionLength = room.is_break ? room.break_time : room.session_time;
-        const remainingTime = Math.max(0, sessionLength - elapsedSeconds);
+        const elapsedSeconds = Math.floor((currentTime - lastSessionStarted) / 1000);
         
-        setTime(remainingTime);
+        if (room.is_break) {
+          // For break time, just use the break_time value
+          setTime(room.break_time);
+        } else {
+          // For regular session, calculate remaining time
+          const remainingTime = Math.max(0, room.session_time - elapsedSeconds);
+          setTime(remainingTime);
+        }
+        
+        // Only start running if there's time remaining
         setIsRunning(true);
       }
     };
 
     fetchPomodoroRoom();
+    
+    // Set up real-time subscription for pomodoro room updates
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pomodoro_rooms'
+        },
+        (payload) => {
+          console.log('Pomodoro room updated:', payload);
+          fetchPomodoroRoom(); // Refetch room data when changes occur
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Sync timer with server
@@ -123,10 +151,12 @@ const Dashboard = () => {
 
   const toggleTimer = () => setIsRunning(!isRunning);
   const resetTimer = () => {
-    const sessionLength = pomodoroRoom?.is_break ? 
+    if (!pomodoroRoom) return;
+    
+    const sessionLength = pomodoroRoom.is_break ? 
       pomodoroRoom.break_time : 
       pomodoroRoom.session_time;
-    setTime(sessionLength || 25 * 60);
+    setTime(sessionLength);
     setIsRunning(false);
   };
 
