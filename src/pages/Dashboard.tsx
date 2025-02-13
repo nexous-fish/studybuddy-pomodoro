@@ -21,12 +21,10 @@ const Dashboard = () => {
     const sessionEndTime = lastSessionStarted + (room.session_time * 1000);
     const breakEndTime = sessionEndTime + (room.break_time * 1000);
     
-    // If current time is past break end time, return 0
     if (currentTime >= breakEndTime) {
       return 0;
     }
     
-    // Calculate remaining break time
     const remainingBreakTime = Math.ceil((breakEndTime - currentTime) / 1000);
     return Math.max(0, Math.min(remainingBreakTime, room.break_time));
   };
@@ -39,48 +37,38 @@ const Dashboard = () => {
     return Math.max(0, room.session_time - elapsedSeconds);
   };
 
-  // Fetch pomodoro room data and initialize timer
+  // Check room status periodically
+  const checkRoomStatus = async () => {
+    const { data: room, error } = await supabase
+      .from('pomodoro_rooms')
+      .select('*')
+      .maybeSingle();
+
+    if (error || !room) return;
+
+    setPomodoroRoom(room);
+    const userDataEntries = Object.entries(room.user_data || {});
+    const formattedUsers = userDataEntries.map(([id, avatarUrl]) => ({
+      id,
+      avatar: avatarUrl,
+    }));
+    setConnectedUsers(formattedUsers);
+
+    if (room.is_break) {
+      const breakTime = calculateBreakTimer(room);
+      setTime(breakTime);
+      setIsRunning(breakTime > 0);
+    } else {
+      const sessionTime = calculateSessionTimer(room);
+      setTime(sessionTime);
+      setIsRunning(sessionTime > 0);
+    }
+  };
+
+  // Initialize and handle real-time updates
   useEffect(() => {
-    const fetchPomodoroRoom = async () => {
-      const { data: room, error } = await supabase
-        .from('pomodoro_rooms')
-        .select('*')
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching pomodoro room:', error);
-        return;
-      }
-
-      if (room) {
-        setPomodoroRoom(room);
-        const users = Object.values(room.user_data || {});
-        setConnectedUsers(users);
-        
-        // Calculate timer based on is_break status
-        if (room.is_break) {
-          const breakTime = calculateBreakTimer(room);
-          setTime(breakTime);
-          if (breakTime === 0) {
-            setIsRunning(false);
-          } else {
-            setIsRunning(true);
-          }
-        } else {
-          const sessionTime = calculateSessionTimer(room);
-          setTime(sessionTime);
-          if (sessionTime === 0) {
-            setIsRunning(false);
-          } else {
-            setIsRunning(true);
-          }
-        }
-      }
-    };
-
-    fetchPomodoroRoom();
+    checkRoomStatus();
     
-    // Set up real-time subscription for pomodoro room updates
     const channel = supabase
       .channel('schema-db-changes')
       .on(
@@ -90,10 +78,7 @@ const Dashboard = () => {
           schema: 'public',
           table: 'pomodoro_rooms'
         },
-        (payload) => {
-          console.log('Pomodoro room updated:', payload);
-          fetchPomodoroRoom(); // Refetch room data when changes occur
-        }
+        () => checkRoomStatus()
       )
       .subscribe();
 
@@ -102,27 +87,30 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Timer effect
+  // Timer effect with auto-refresh
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let checkInterval: NodeJS.Timeout;
 
     if (pomodoroRoom && isRunning && time > 0) {
       interval = setInterval(() => {
         setTime((prevTime) => {
           const newTime = prevTime - 1;
           if (newTime === 0) {
-            // Timer finished
             if (pomodoroRoom.is_break) {
               toast({
                 title: "Break time's up!",
                 description: "Time to focus!",
               });
+              // Set up periodic check for new session
+              checkInterval = setInterval(() => {
+                checkRoomStatus();
+              }, 10000); // Check every 10 seconds
             } else {
               toast({
                 title: "Session complete!",
                 description: "Time for a break!",
               });
-              // When session ends, check break timer
               const breakTime = calculateBreakTimer(pomodoroRoom);
               if (breakTime > 0) {
                 setTime(breakTime);
@@ -136,9 +124,13 @@ const Dashboard = () => {
       }, 1000);
     }
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (checkInterval) clearInterval(checkInterval);
+    };
   }, [isRunning, time, toast, pomodoroRoom]);
 
+  // Fetch user stats
   useEffect(() => {
     const fetchUserStats = async () => {
       const { data: stats, error } = await supabase
@@ -171,29 +163,35 @@ const Dashboard = () => {
   };
 
   // Convert daily voice time from seconds to hours for the chart
-  const chartData = [
-    { day: 'Mon', hours: (userStats?.daily_voice_time || 0) / 3600 },
-    { day: 'Tue', hours: ((userStats?.daily_voice_time || 0) * 0.8) / 3600 },
-    { day: 'Wed', hours: ((userStats?.daily_voice_time || 0) * 1.2) / 3600 },
-    { day: 'Thu', hours: ((userStats?.daily_voice_time || 0) * 0.9) / 3600 },
-    { day: 'Fri', hours: ((userStats?.daily_voice_time || 0) * 1.1) / 3600 },
-    { day: 'Sat', hours: ((userStats?.daily_voice_time || 0) * 0.7) / 3600 },
-    { day: 'Sun', hours: (userStats?.daily_voice_time || 0) / 3600 },
-  ];
+  const chartData = userStats ? [
+    { 
+      name: 'Previous Week',
+      hours: userStats.previous_weekly_voice_time / 3600
+    },
+    { 
+      name: 'Current Week',
+      hours: userStats.weekly_voice_time / 3600
+    },
+    { 
+      name: 'Today',
+      hours: userStats.daily_voice_time / 3600
+    },
+    { 
+      name: 'Total',
+      hours: userStats.total_voice_time / 3600
+    }
+  ] : [];
 
   const formatTime = (timeInSeconds: number) => {
     const minutes = Math.floor(timeInSeconds / 60);
     const seconds = timeInSeconds % 60;
-    return `${minutes.toString().padStart(2, "0")}:${seconds
-      .toString()
-      .padStart(2, "0")}`;
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
   const toggleTimer = () => setIsRunning(!isRunning);
+  
   const resetTimer = () => {
     if (!pomodoroRoom) return;
-    
-    // Reset based on current mode
     if (pomodoroRoom.is_break) {
       setTime(calculateBreakTimer(pomodoroRoom));
     } else {
@@ -314,7 +312,7 @@ const Dashboard = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/20" />
-                  <XAxis dataKey="day" className="text-xs" />
+                  <XAxis dataKey="name" className="text-xs" />
                   <YAxis className="text-xs" />
                   <Tooltip />
                   <Area
@@ -333,13 +331,13 @@ const Dashboard = () => {
             <p className="text-sm text-muted-foreground">
               Connected Users
             </p>
-            <div className="flex justify-center -space-x-2 overflow-hidden py-4">
-              {connectedUsers.map((user: any, i: number) => (
+            <div className="flex justify-center -space-x-2 overflow-hidden py-4 flex-wrap">
+              {connectedUsers.map((user: any) => (
                 <div
-                  key={i}
+                  key={user.id}
                   className="inline-block h-10 w-10 rounded-full ring-2 ring-background"
                   style={{
-                    backgroundImage: `url(${user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${i}`})`,
+                    backgroundImage: `url(${user.avatar})`,
                     backgroundSize: "cover",
                   }}
                 />
