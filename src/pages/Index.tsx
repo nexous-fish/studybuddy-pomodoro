@@ -2,9 +2,23 @@
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const navigate = useNavigate();
+
+  const signInWithDiscord = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        scopes: 'identify email',
+      },
+    });
+
+    if (error) {
+      console.error('Error signing in with Discord:', error.message);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background to-secondary/20">
@@ -23,7 +37,7 @@ const Index = () => {
             <Button
               size="lg"
               className="w-full group relative overflow-hidden bg-primary hover:bg-primary/90 transition-all duration-300"
-              onClick={() => navigate("/dashboard")}
+              onClick={signInWithDiscord}
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
                 Connect with Discord

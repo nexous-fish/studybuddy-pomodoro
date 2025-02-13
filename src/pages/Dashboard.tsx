@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PauseCircle, PlayCircle, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
   const [time, setTime] = useState(0);
@@ -12,7 +13,30 @@ const Dashboard = () => {
   const [userStats, setUserStats] = useState<any>(null);
   const [pomodoroRoom, setPomodoroRoom] = useState<any>(null);
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
+  const [session, setSession] = useState<any>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
+
+  // Check authentication
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (!session) {
+        navigate('/');
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session) {
+        navigate('/');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   // Calculate break timer
   const calculateBreakTimer = (room: any) => {
@@ -39,6 +63,8 @@ const Dashboard = () => {
 
   // Check room status periodically
   const checkRoomStatus = async () => {
+    if (!session) return;
+
     const { data: room, error } = await supabase
       .from('pomodoro_rooms')
       .select('*')
@@ -54,10 +80,22 @@ const Dashboard = () => {
     }));
     setConnectedUsers(formattedUsers);
 
+    const isUserInRoom = userDataEntries.some(([id]) => id === session?.user?.id);
+    if (!isUserInRoom) {
+      setTime(0);
+      setIsRunning(false);
+      return;
+    }
+
     if (room.is_break) {
       const breakTime = calculateBreakTimer(room);
       setTime(breakTime);
       setIsRunning(breakTime > 0);
+      
+      // If break is over, check for new session
+      if (breakTime === 0) {
+        setTimeout(checkRoomStatus, 10000); // Check after 10 seconds
+      }
     } else {
       const sessionTime = calculateSessionTimer(room);
       setTime(sessionTime);
@@ -68,6 +106,9 @@ const Dashboard = () => {
   // Initialize and handle real-time updates
   useEffect(() => {
     checkRoomStatus();
+    
+    // Check connected users every 30 seconds
+    const userCheckInterval = setInterval(checkRoomStatus, 30000);
     
     const channel = supabase
       .channel('schema-db-changes')
@@ -84,8 +125,9 @@ const Dashboard = () => {
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(userCheckInterval);
     };
-  }, []);
+  }, [session]);
 
   // Timer effect with auto-refresh
   useEffect(() => {
@@ -133,6 +175,8 @@ const Dashboard = () => {
   // Fetch user stats
   useEffect(() => {
     const fetchUserStats = async () => {
+      if (!session) return;
+
       const { data: stats, error } = await supabase
         .from('user_stats')
         .select('*')
@@ -149,7 +193,7 @@ const Dashboard = () => {
     };
 
     fetchUserStats();
-  }, []);
+  }, [session]);
 
   // Calculate weekly progress percentage
   const weeklyProgressPercentage = userStats ? 
@@ -204,6 +248,18 @@ const Dashboard = () => {
     ((pomodoroRoom.is_break ? pomodoroRoom.break_time : pomodoroRoom.session_time) - time) / 
     (pomodoroRoom.is_break ? pomodoroRoom.break_time : pomodoroRoom.session_time) * 283 : 
     0;
+
+  // Only show content if user is in the room
+  if (!session || !pomodoroRoom || !connectedUsers.some(user => user.id === session.user.id)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary/20">
+        <Card className="p-8 text-center">
+          <h2 className="text-2xl font-semibold mb-4">Not Connected</h2>
+          <p className="text-muted-foreground">You need to be in an active room to see this content.</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
