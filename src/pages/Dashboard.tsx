@@ -14,6 +14,31 @@ const Dashboard = () => {
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
   const { toast } = useToast();
 
+  // Calculate break timer
+  const calculateBreakTimer = (room: any) => {
+    const lastSessionStarted = new Date(room.last_session_started).getTime();
+    const currentTime = new Date().getTime();
+    const sessionEndTime = lastSessionStarted + (room.session_time * 1000);
+    const breakEndTime = sessionEndTime + (room.break_time * 1000);
+    
+    // If current time is past break end time, return 0
+    if (currentTime >= breakEndTime) {
+      return 0;
+    }
+    
+    // Calculate remaining break time
+    const remainingBreakTime = Math.ceil((breakEndTime - currentTime) / 1000);
+    return Math.max(0, Math.min(remainingBreakTime, room.break_time));
+  };
+
+  // Calculate session timer
+  const calculateSessionTimer = (room: any) => {
+    const lastSessionStarted = new Date(room.last_session_started).getTime();
+    const currentTime = new Date().getTime();
+    const elapsedSeconds = Math.floor((currentTime - lastSessionStarted) / 1000);
+    return Math.max(0, room.session_time - elapsedSeconds);
+  };
+
   // Fetch pomodoro room data and initialize timer
   useEffect(() => {
     const fetchPomodoroRoom = async () => {
@@ -29,26 +54,27 @@ const Dashboard = () => {
 
       if (room) {
         setPomodoroRoom(room);
-        // Extract connected users from user_data
         const users = Object.values(room.user_data || {});
         setConnectedUsers(users);
         
-        // Calculate remaining time based on last_session_started
-        const lastSessionStarted = new Date(room.last_session_started).getTime();
-        const currentTime = new Date().getTime();
-        const elapsedSeconds = Math.floor((currentTime - lastSessionStarted) / 1000);
-        
+        // Calculate timer based on is_break status
         if (room.is_break) {
-          // For break time, just use the break_time value
-          setTime(room.break_time);
+          const breakTime = calculateBreakTimer(room);
+          setTime(breakTime);
+          if (breakTime === 0) {
+            setIsRunning(false);
+          } else {
+            setIsRunning(true);
+          }
         } else {
-          // For regular session, calculate remaining time
-          const remainingTime = Math.max(0, room.session_time - elapsedSeconds);
-          setTime(remainingTime);
+          const sessionTime = calculateSessionTimer(room);
+          setTime(sessionTime);
+          if (sessionTime === 0) {
+            setIsRunning(false);
+          } else {
+            setIsRunning(true);
+          }
         }
-        
-        // Only start running if there's time remaining
-        setIsRunning(true);
       }
     };
 
@@ -76,7 +102,7 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Sync timer with server
+  // Timer effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -85,10 +111,24 @@ const Dashboard = () => {
         setTime((prevTime) => {
           const newTime = prevTime - 1;
           if (newTime === 0) {
-            toast({
-              title: pomodoroRoom.is_break ? "Break time's up!" : "Time's up!",
-              description: pomodoroRoom.is_break ? "Time to focus!" : "Take a break!",
-            });
+            // Timer finished
+            if (pomodoroRoom.is_break) {
+              toast({
+                title: "Break time's up!",
+                description: "Time to focus!",
+              });
+            } else {
+              toast({
+                title: "Session complete!",
+                description: "Time for a break!",
+              });
+              // When session ends, check break timer
+              const breakTime = calculateBreakTimer(pomodoroRoom);
+              if (breakTime > 0) {
+                setTime(breakTime);
+                return breakTime;
+              }
+            }
             setIsRunning(false);
           }
           return newTime;
@@ -153,10 +193,12 @@ const Dashboard = () => {
   const resetTimer = () => {
     if (!pomodoroRoom) return;
     
-    const sessionLength = pomodoroRoom.is_break ? 
-      pomodoroRoom.break_time : 
-      pomodoroRoom.session_time;
-    setTime(sessionLength);
+    // Reset based on current mode
+    if (pomodoroRoom.is_break) {
+      setTime(calculateBreakTimer(pomodoroRoom));
+    } else {
+      setTime(calculateSessionTimer(pomodoroRoom));
+    }
     setIsRunning(false);
   };
 
@@ -192,6 +234,7 @@ const Dashboard = () => {
                       cx="50"
                       cy="50"
                       style={{
+                        strokeDasharray: "283",
                         strokeDashoffset: 283 - progress,
                       }}
                     />
