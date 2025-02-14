@@ -14,21 +14,38 @@ const Dashboard = () => {
   const [pomodoroRoom, setPomodoroRoom] = useState<any>(null);
   const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
   const [session, setSession] = useState<any>(null);
+  const [discordId, setDiscordId] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Check authentication
+  // Check authentication and get profile
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
+      
       if (!session) {
         navigate('/');
+        return;
       }
-    });
+
+      // Get the user's profile to access discord_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('discord_id')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile?.discord_id) {
+        setDiscordId(profile.discord_id);
+      }
+    };
+
+    checkAuth();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (!session) {
         navigate('/');
@@ -65,6 +82,12 @@ const Dashboard = () => {
   const checkRoomStatus = async () => {
     if (!session) return;
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('discord_id')
+      .eq('id', session.user.id)
+      .single();
+
     const { data: room, error } = await supabase
       .from('pomodoro_rooms')
       .select('*')
@@ -80,7 +103,8 @@ const Dashboard = () => {
     }));
     setConnectedUsers(formattedUsers);
 
-    const isUserInRoom = userDataEntries.some(([id]) => id === session?.user?.id);
+    // Check if user is in room using discord_id instead of Supabase UUID
+    const isUserInRoom = profile?.discord_id && userDataEntries.some(([id]) => id === profile.discord_id);
     if (!isUserInRoom) {
       setTime(0);
       setIsRunning(false);
@@ -250,7 +274,7 @@ const Dashboard = () => {
     0;
 
   // Only show content if user is in the room
-  if (!session || !pomodoroRoom || !connectedUsers.some(user => user.id === session.user.id)) {
+  if (!session || !pomodoroRoom || !connectedUsers.some(user => user.id === discordId)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary/20">
         <Card className="p-8 text-center">
