@@ -38,6 +38,7 @@ const Dashboard = () => {
 
       if (profile?.discord_id) {
         setDiscordId(profile.discord_id);
+        console.log('Set Discord ID:', profile.discord_id); // Debug log
       }
     };
 
@@ -88,12 +89,19 @@ const Dashboard = () => {
       .eq('id', session.user.id)
       .single();
 
+    if (profile?.discord_id) {
+      setDiscordId(profile.discord_id);
+    }
+
     const { data: room, error } = await supabase
       .from('pomodoro_rooms')
       .select('*')
       .maybeSingle();
 
     if (error || !room) return;
+
+    console.log('Room user_data:', room.user_data); // Debug log
+    console.log('Current Discord ID:', profile?.discord_id); // Debug log
 
     setPomodoroRoom(room);
     const userDataEntries = Object.entries(room.user_data || {});
@@ -103,8 +111,10 @@ const Dashboard = () => {
     }));
     setConnectedUsers(formattedUsers);
 
-    // Check if user is in room using discord_id instead of Supabase UUID
+    // Check if user is in room using discord_id
     const isUserInRoom = profile?.discord_id && userDataEntries.some(([id]) => id === profile.discord_id);
+    console.log('Is user in room:', isUserInRoom); // Debug log
+
     if (!isUserInRoom) {
       setTime(0);
       setIsRunning(false);
@@ -116,9 +126,8 @@ const Dashboard = () => {
       setTime(breakTime);
       setIsRunning(breakTime > 0);
       
-      // If break is over, check for new session
       if (breakTime === 0) {
-        setTimeout(checkRoomStatus, 10000); // Check after 10 seconds
+        setTimeout(checkRoomStatus, 10000);
       }
     } else {
       const sessionTime = calculateSessionTimer(room);
@@ -274,7 +283,20 @@ const Dashboard = () => {
     0;
 
   // Only show content if user is in the room
-  if (!session || !pomodoroRoom || !connectedUsers.some(user => user.id === discordId)) {
+  if (!session || !pomodoroRoom) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary/20">
+        <Card className="p-8 text-center">
+          <h2 className="text-2xl font-semibold mb-4">Not Connected</h2>
+          <p className="text-muted-foreground">You need to be in an active room to see this content.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  // Check if the user's Discord ID is in the room's user_data
+  const userInRoom = Object.keys(pomodoroRoom.user_data || {}).includes(discordId || '');
+  if (!userInRoom) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary/20">
         <Card className="p-8 text-center">
