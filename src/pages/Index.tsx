@@ -4,19 +4,44 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
 
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Check if user is already authenticated and in a room
-  useEffect(() => {
-    const checkAuthAndRoom = async () => {
+  const signInWithDiscord = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'discord',
+        options: {
+          scopes: 'identify email',
+          redirectTo: window.location.origin,
+        },
+      });
+
+      if (error) {
+        console.error('Error signing in with Discord:', error.message);
+        
+        // Show a user-friendly error message
+        if (error.message?.includes('rate limit') || error.message?.includes('Unable to exchange external code')) {
+          toast({
+            title: "Too many login attempts",
+            description: "Please wait a few minutes before trying again.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Authentication error",
+            description: "There was a problem signing in with Discord. Please try again.",
+            variant: "destructive",
+          });
+        }
+        return;
+      }
+
+      // Check if user exists in a room after successful authentication
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (session) {
-        // Get the user's Discord ID from their profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('discord_id')
@@ -24,49 +49,23 @@ const Index = () => {
           .single();
 
         if (profile?.discord_id) {
-          // Check if user is in an active room
           const { data: room } = await supabase
             .from('pomodoro_rooms')
             .select('user_data')
             .maybeSingle();
 
           if (room && room.user_data && Object.keys(room.user_data).includes(profile.discord_id)) {
-            // User is in an active room, redirect to dashboard
             navigate('/dashboard');
           }
         }
       }
-    };
-
-    checkAuthAndRoom();
-  }, [navigate]);
-
-  const signInWithDiscord = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'discord',
-      options: {
-        scopes: 'identify email',
-        redirectTo: window.location.origin,
-      },
-    });
-
-    if (error) {
-      console.error('Error signing in with Discord:', error.message);
-      
-      // Show a user-friendly error message
-      if (error.message?.includes('rate limit') || error.message?.includes('Unable to exchange external code')) {
-        toast({
-          title: "Too many login attempts",
-          description: "Please wait a few minutes before trying again.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Authentication error",
-          description: "There was a problem signing in with Discord. Please try again.",
-          variant: "destructive",
-        });
-      }
+    } catch (error) {
+      console.error('Error during authentication:', error);
+      toast({
+        title: "Authentication error",
+        description: "There was a problem signing in with Discord. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
