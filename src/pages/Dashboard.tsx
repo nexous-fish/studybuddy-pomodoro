@@ -38,7 +38,20 @@ const Dashboard = () => {
 
       if (profile?.discord_id) {
         setDiscordId(profile.discord_id);
-        console.log('Set Discord ID:', profile.discord_id); // Debug log
+        
+        // Check if user is in an active room
+        const { data: room } = await supabase
+          .from('pomodoro_rooms')
+          .select('user_data')
+          .maybeSingle();
+
+        if (!room || !room.user_data || !Object.keys(room.user_data).includes(profile.discord_id)) {
+          navigate('/');
+          return;
+        }
+      } else {
+        navigate('/');
+        return;
       }
     };
 

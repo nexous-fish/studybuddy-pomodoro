@@ -4,10 +4,42 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Check if user is already authenticated and in a room
+  useEffect(() => {
+    const checkAuthAndRoom = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Get the user's Discord ID from their profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('discord_id')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile?.discord_id) {
+          // Check if user is in an active room
+          const { data: room } = await supabase
+            .from('pomodoro_rooms')
+            .select('user_data')
+            .maybeSingle();
+
+          if (room && room.user_data && Object.keys(room.user_data).includes(profile.discord_id)) {
+            // User is in an active room, redirect to dashboard
+            navigate('/dashboard');
+          }
+        }
+      }
+    };
+
+    checkAuthAndRoom();
+  }, [navigate]);
 
   const signInWithDiscord = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
