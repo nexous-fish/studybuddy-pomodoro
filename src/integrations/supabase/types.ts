@@ -191,7 +191,7 @@ export type Database = {
           last_updated: string
           previous_weekly_voice_time: number | null
           total_voice_time: number | null
-          user_id: number
+          user_id: string
           weekly_voice_time: number | null
         }
         Insert: {
@@ -199,7 +199,7 @@ export type Database = {
           last_updated?: string
           previous_weekly_voice_time?: number | null
           total_voice_time?: number | null
-          user_id: number
+          user_id: string
           weekly_voice_time?: number | null
         }
         Update: {
@@ -207,7 +207,7 @@ export type Database = {
           last_updated?: string
           previous_weekly_voice_time?: number | null
           total_voice_time?: number | null
-          user_id?: number
+          user_id?: string
           weekly_voice_time?: number | null
         }
         Relationships: []

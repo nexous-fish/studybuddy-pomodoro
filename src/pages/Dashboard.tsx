@@ -81,13 +81,12 @@ const Dashboard = () => {
         }));
         setConnectedUsers(formattedUsers);
         
-        const parsedId = safeParseDiscordId(profile.discord_id);
-        console.log('Querying stats for Discord ID:', parsedId);
+        console.log('Querying stats for Discord ID:', profile.discord_id);
         
         const { data: stats, error: statsError } = await supabase
           .from('user_stats')
           .select('*')
-          .eq('user_id', parsedId)
+          .eq('user_id', profile.discord_id)
           .maybeSingle();
 
         if (statsError) {
@@ -128,13 +127,12 @@ const Dashboard = () => {
     const fetchUserStats = async () => {
       if (!discordId) return;
 
-      const parsedId = safeParseDiscordId(discordId);
-      console.log('Fetching stats for Discord ID:', parsedId);
+      console.log('Fetching stats for Discord ID:', discordId);
 
       const { data: stats, error } = await supabase
         .from('user_stats')
         .select('*')
-        .eq('user_id', parsedId)
+        .eq('user_id', discordId)
         .maybeSingle();
 
       if (error) {
@@ -217,13 +215,12 @@ const Dashboard = () => {
       setIsRunning(sessionTime > 0);
     }
 
-    const parsedId = safeParseDiscordId(discordId);
-    console.log('Fetching updated stats for Discord ID:', parsedId);
+    console.log('Fetching updated stats for Discord ID:', discordId);
     
     const { data: stats, error: statsError } = await supabase
       .from('user_stats')
       .select('*')
-      .eq('user_id', parsedId)
+      .eq('user_id', discordId)
       .maybeSingle();
 
     if (statsError) {
