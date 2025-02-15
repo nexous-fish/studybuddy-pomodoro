@@ -60,7 +60,7 @@ const Dashboard = () => {
         setConnectedUsers(formattedUsers);
 
         // Convert discord_id to number before querying user_stats
-        const numericDiscordId = profile.discord_id ? BigInt(profile.discord_id) : null;
+        const numericDiscordId = profile.discord_id ? parseInt(profile.discord_id) : null;
         if (numericDiscordId) {
           // Fetch user stats using discord_id as number
           const { data: stats } = await supabase
@@ -160,7 +160,7 @@ const Dashboard = () => {
     }
 
     // Convert discord_id to number before querying user_stats
-    const numericDiscordId = discordId ? BigInt(discordId) : null;
+    const numericDiscordId = discordId ? parseInt(discordId) : null;
     if (numericDiscordId) {
       // Fetch updated user stats with numeric discord_id
       const { data: stats } = await supabase
