@@ -1,3 +1,4 @@
+
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -218,8 +219,8 @@ const Dashboard = () => {
       setIsRunning(sessionTime > 0);
     }
 
-    // Convert discord_id to number before querying user_stats
-    const numericId = Number(profile.discord_id);
+    // Fetch updated user stats using the discord_id from state
+    const numericId = Number(discordId);
     
     // Fetch updated user stats
     const { data: stats, error: statsError } = await supabase
@@ -234,7 +235,7 @@ const Dashboard = () => {
     }
 
     if (stats) {
-      console.log('Updated user stats:', stats); // Debug log
+      console.log('Updated user stats:', stats);
       setUserStats(stats);
     } else {
       console.log('No updated stats found for discord_id:', discordId);
