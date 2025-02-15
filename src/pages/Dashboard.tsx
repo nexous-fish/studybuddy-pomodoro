@@ -31,14 +31,22 @@ const Dashboard = () => {
       }
 
       // Get the user's profile to access discord_id
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('discord_id')
         .eq('id', session.user.id)
         .single();
 
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        return;
+      }
+
+      console.log('Profile:', profile); // Debug log
+
       if (profile?.discord_id) {
         setDiscordId(profile.discord_id);
+        console.log('Discord ID:', profile.discord_id); // Debug log
         
         // Check if user is in an active room
         const { data: room } = await supabase
@@ -59,20 +67,23 @@ const Dashboard = () => {
         }));
         setConnectedUsers(formattedUsers);
 
-        // Convert discord_id to number before querying user_stats
-        const numericDiscordId = profile.discord_id ? parseInt(profile.discord_id) : null;
-        if (numericDiscordId) {
-          // Fetch user stats using discord_id as number
-          const { data: stats } = await supabase
-            .from('user_stats')
-            .select('*')
-            .eq('user_id', numericDiscordId)
-            .maybeSingle();
+        // Fetch user stats using string discord_id
+        const { data: stats, error: statsError } = await supabase
+          .from('user_stats')
+          .select('*')
+          .eq('user_id', profile.discord_id)
+          .maybeSingle();
 
-          if (stats) {
-            console.log('User stats:', stats); // Debug log
-            setUserStats(stats);
-          }
+        if (statsError) {
+          console.error('Stats fetch error:', statsError);
+          return;
+        }
+
+        if (stats) {
+          console.log('Found user stats:', stats); // Debug log
+          setUserStats(stats);
+        } else {
+          console.log('No stats found for discord_id:', profile.discord_id);
         }
       } else {
         navigate('/');
@@ -159,20 +170,23 @@ const Dashboard = () => {
       setIsRunning(sessionTime > 0);
     }
 
-    // Convert discord_id to number before querying user_stats
-    const numericDiscordId = discordId ? parseInt(discordId) : null;
-    if (numericDiscordId) {
-      // Fetch updated user stats with numeric discord_id
-      const { data: stats } = await supabase
-        .from('user_stats')
-        .select('*')
-        .eq('user_id', numericDiscordId)
-        .maybeSingle();
+    // Fetch updated user stats
+    const { data: stats, error: statsError } = await supabase
+      .from('user_stats')
+      .select('*')
+      .eq('user_id', discordId)
+      .maybeSingle();
 
-      if (stats) {
-        console.log('Updated user stats:', stats); // Debug log
-        setUserStats(stats);
-      }
+    if (statsError) {
+      console.error('Stats update error:', statsError);
+      return;
+    }
+
+    if (stats) {
+      console.log('Updated user stats:', stats); // Debug log
+      setUserStats(stats);
+    } else {
+      console.log('No updated stats found for discord_id:', discordId);
     }
   };
 
