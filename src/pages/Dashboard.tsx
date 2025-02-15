@@ -18,23 +18,31 @@ const Dashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Check authentication and get profile
+  const safeParseDiscordId = (discordId: string): number => {
+    try {
+      const bigIntId = BigInt(discordId);
+      return Number(bigIntId);
+    } catch (error) {
+      console.error('Error parsing Discord ID:', error);
+      return 0;
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
-      console.log('Starting checkAuth...'); // Debug log
+      console.log('Starting checkAuth...');
       
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Session:', session); // Debug log
+      console.log('Session:', session);
       
       setSession(session);
       
       if (!session) {
-        console.log('No session, redirecting to index'); // Debug log
+        console.log('No session, redirecting to index');
         navigate('/');
         return;
       }
 
-      // Get the user's profile to access discord_id
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('discord_id')
@@ -46,22 +54,21 @@ const Dashboard = () => {
         return;
       }
 
-      console.log('Profile data:', profile); // Debug log
+      console.log('Profile data:', profile);
 
       if (profile?.discord_id) {
         setDiscordId(profile.discord_id);
-        console.log('Setting Discord ID:', profile.discord_id); // Debug log
+        console.log('Setting Discord ID:', profile.discord_id);
         
-        // Check if user is in an active room
         const { data: room } = await supabase
           .from('pomodoro_rooms')
           .select('*')
           .maybeSingle();
 
-        console.log('Room data:', room); // Debug log
+        console.log('Room data:', room);
 
         if (!room || !room.user_data || !Object.keys(room.user_data).includes(profile.discord_id)) {
-          console.log('User not in room, redirecting to index'); // Debug log
+          console.log('User not in room, redirecting to index');
           navigate('/');
           return;
         }
@@ -74,14 +81,13 @@ const Dashboard = () => {
         }));
         setConnectedUsers(formattedUsers);
         
-        // Use discord_id directly as a string
-        console.log('Querying stats for Discord ID:', profile.discord_id); // Debug log
+        const parsedId = safeParseDiscordId(profile.discord_id);
+        console.log('Querying stats for Discord ID:', parsedId);
         
-        // Fetch user stats using discord_id as string
         const { data: stats, error: statsError } = await supabase
           .from('user_stats')
           .select('*')
-          .eq('user_id', profile.discord_id)
+          .eq('user_id', parsedId)
           .maybeSingle();
 
         if (statsError) {
@@ -89,16 +95,16 @@ const Dashboard = () => {
           return;
         }
 
-        console.log('Raw stats data:', stats); // Debug log
+        console.log('Raw stats data:', stats);
 
         if (stats) {
-          console.log('Setting user stats:', stats); // Debug log
+          console.log('Setting user stats:', stats);
           setUserStats(stats);
         } else {
           console.log('No stats found for discord_id:', profile.discord_id);
         }
       } else {
-        console.log('No Discord ID found, redirecting to index'); // Debug log
+        console.log('No Discord ID found, redirecting to index');
         navigate('/');
         return;
       }
@@ -118,17 +124,17 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Fetch user stats periodically
   useEffect(() => {
     const fetchUserStats = async () => {
       if (!discordId) return;
 
-      console.log('Fetching stats for Discord ID:', discordId); // Debug log
+      const parsedId = safeParseDiscordId(discordId);
+      console.log('Fetching stats for Discord ID:', parsedId);
 
       const { data: stats, error } = await supabase
         .from('user_stats')
         .select('*')
-        .eq('user_id', discordId)
+        .eq('user_id', parsedId)
         .maybeSingle();
 
       if (error) {
@@ -137,21 +143,19 @@ const Dashboard = () => {
       }
 
       if (stats) {
-        console.log('Periodic stats update:', stats); // Debug log
+        console.log('Periodic stats update:', stats);
         setUserStats(stats);
       } else {
         console.log('No stats found in periodic update for:', discordId);
       }
     };
 
-    // Fetch initially and then every 30 seconds
     fetchUserStats();
     const interval = setInterval(fetchUserStats, 30000);
 
     return () => clearInterval(interval);
   }, [discordId]);
 
-  // Calculate break timer
   const calculateBreakTimer = (room: any) => {
     const lastSessionStarted = new Date(room.last_session_started).getTime();
     const currentTime = new Date().getTime();
@@ -166,7 +170,6 @@ const Dashboard = () => {
     return Math.max(0, Math.min(remainingBreakTime, room.break_time));
   };
 
-  // Calculate session timer
   const calculateSessionTimer = (room: any) => {
     const lastSessionStarted = new Date(room.last_session_started).getTime();
     const currentTime = new Date().getTime();
@@ -174,7 +177,6 @@ const Dashboard = () => {
     return Math.max(0, room.session_time - elapsedSeconds);
   };
 
-  // Check room status periodically
   const checkRoomStatus = async () => {
     if (!session || !discordId) return;
 
@@ -193,7 +195,6 @@ const Dashboard = () => {
     }));
     setConnectedUsers(formattedUsers);
 
-    // Check if user is in room using discord_id
     const isUserInRoom = userDataEntries.some(([id]) => id === discordId);
     
     if (!isUserInRoom) {
@@ -216,14 +217,13 @@ const Dashboard = () => {
       setIsRunning(sessionTime > 0);
     }
 
-    // Use discord_id directly as string
-    console.log('Fetching updated stats for Discord ID:', discordId); // Debug log
+    const parsedId = safeParseDiscordId(discordId);
+    console.log('Fetching updated stats for Discord ID:', parsedId);
     
-    // Fetch updated user stats using discord_id as string
     const { data: stats, error: statsError } = await supabase
       .from('user_stats')
       .select('*')
-      .eq('user_id', discordId)
+      .eq('user_id', parsedId)
       .maybeSingle();
 
     if (statsError) {
@@ -239,11 +239,9 @@ const Dashboard = () => {
     }
   };
 
-  // Initialize and handle real-time updates
   useEffect(() => {
     checkRoomStatus();
     
-    // Check connected users every 30 seconds
     const userCheckInterval = setInterval(checkRoomStatus, 30000);
     
     const channel = supabase
@@ -265,7 +263,6 @@ const Dashboard = () => {
     };
   }, [session]);
 
-  // Timer effect with auto-refresh
   useEffect(() => {
     let interval: NodeJS.Timeout;
     let checkInterval: NodeJS.Timeout;
@@ -280,10 +277,9 @@ const Dashboard = () => {
                 title: "Break time's up!",
                 description: "Time to focus!",
               });
-              // Set up periodic check for new session
               checkInterval = setInterval(() => {
                 checkRoomStatus();
-              }, 10000); // Check every 10 seconds
+              }, 10000);
             } else {
               toast({
                 title: "Session complete!",
@@ -308,18 +304,15 @@ const Dashboard = () => {
     };
   }, [isRunning, time, toast, pomodoroRoom]);
 
-  // Calculate weekly progress percentage
   const weeklyProgressPercentage = userStats ? 
     ((userStats.weekly_voice_time - userStats.previous_weekly_voice_time) / 
     (userStats.previous_weekly_voice_time || 1)) * 100 : 0;
 
-  // Convert seconds to hours for display
   const formatHours = (seconds: number) => {
-    const hours = seconds / 3600; // Convert seconds to hours
+    const hours = seconds / 3600;
     return `${hours.toFixed(1)}h`;
   };
 
-  // Convert daily voice time from seconds to hours for the chart
   const chartData = userStats ? [
     { 
       name: 'Previous Week',
@@ -362,7 +355,6 @@ const Dashboard = () => {
     (pomodoroRoom.is_break ? pomodoroRoom.break_time : pomodoroRoom.session_time) * 283 : 
     0;
 
-  // Only show content if user is in the room
   if (!session || !pomodoroRoom) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary/20">
@@ -374,7 +366,6 @@ const Dashboard = () => {
     );
   }
 
-  // Check if the user's Discord ID is in the room's user_data
   const userInRoom = Object.keys(pomodoroRoom.user_data || {}).includes(discordId || '');
   if (!userInRoom) {
     return (
