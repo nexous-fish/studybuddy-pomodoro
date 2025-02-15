@@ -1,3 +1,4 @@
+
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -42,12 +43,32 @@ const Dashboard = () => {
         // Check if user is in an active room
         const { data: room } = await supabase
           .from('pomodoro_rooms')
-          .select('user_data')
+          .select('*')
           .maybeSingle();
 
         if (!room || !room.user_data || !Object.keys(room.user_data).includes(profile.discord_id)) {
           navigate('/');
           return;
+        }
+
+        setPomodoroRoom(room);
+        const userDataEntries = Object.entries(room.user_data || {});
+        const formattedUsers = userDataEntries.map(([id, avatarUrl]) => ({
+          id,
+          avatar: avatarUrl,
+        }));
+        setConnectedUsers(formattedUsers);
+
+        // Fetch user stats using discord_id
+        const { data: stats } = await supabase
+          .from('user_stats')
+          .select('*')
+          .eq('user_id', profile.discord_id)
+          .maybeSingle();
+
+        if (stats) {
+          console.log('User stats:', stats); // Debug log
+          setUserStats(stats);
         }
       } else {
         navigate('/');
@@ -94,17 +115,7 @@ const Dashboard = () => {
 
   // Check room status periodically
   const checkRoomStatus = async () => {
-    if (!session) return;
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('discord_id')
-      .eq('id', session.user.id)
-      .single();
-
-    if (profile?.discord_id) {
-      setDiscordId(profile.discord_id);
-    }
+    if (!session || !discordId) return;
 
     const { data: room, error } = await supabase
       .from('pomodoro_rooms')
@@ -112,9 +123,6 @@ const Dashboard = () => {
       .maybeSingle();
 
     if (error || !room) return;
-
-    console.log('Room user_data:', room.user_data); // Debug log
-    console.log('Current Discord ID:', profile?.discord_id); // Debug log
 
     setPomodoroRoom(room);
     const userDataEntries = Object.entries(room.user_data || {});
@@ -125,9 +133,8 @@ const Dashboard = () => {
     setConnectedUsers(formattedUsers);
 
     // Check if user is in room using discord_id
-    const isUserInRoom = profile?.discord_id && userDataEntries.some(([id]) => id === profile.discord_id);
-    console.log('Is user in room:', isUserInRoom); // Debug log
-
+    const isUserInRoom = userDataEntries.some(([id]) => id === discordId);
+    
     if (!isUserInRoom) {
       setTime(0);
       setIsRunning(false);
@@ -146,6 +153,18 @@ const Dashboard = () => {
       const sessionTime = calculateSessionTimer(room);
       setTime(sessionTime);
       setIsRunning(sessionTime > 0);
+    }
+
+    // Fetch updated user stats
+    const { data: stats } = await supabase
+      .from('user_stats')
+      .select('*')
+      .eq('user_id', discordId)
+      .maybeSingle();
+
+    if (stats) {
+      console.log('Updated user stats:', stats); // Debug log
+      setUserStats(stats);
     }
   };
 
