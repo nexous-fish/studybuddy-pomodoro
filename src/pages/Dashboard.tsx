@@ -174,7 +174,7 @@ const Dashboard = () => {
     }
 
     // Convert discord_id to number before querying user_stats
-    const numericId = Number(discordId);
+    const numericId = Number(profile.discord_id);
     
     // Fetch updated user stats
     const { data: stats, error: statsError } = await supabase
