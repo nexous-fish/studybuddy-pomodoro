@@ -1,4 +1,3 @@
-
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -74,16 +73,15 @@ const Dashboard = () => {
           avatar: avatarUrl,
         }));
         setConnectedUsers(formattedUsers);
-
-        // Convert discord_id to number before querying user_stats
-        const numericId = Number(profile.discord_id);
-        console.log('Numeric Discord ID for query:', numericId); // Debug log
         
-        // Fetch user stats using numeric discord_id
+        // Use discord_id directly as a string
+        console.log('Querying stats for Discord ID:', profile.discord_id); // Debug log
+        
+        // Fetch user stats using discord_id as string
         const { data: stats, error: statsError } = await supabase
           .from('user_stats')
           .select('*')
-          .eq('user_id', numericId)
+          .eq('user_id', profile.discord_id)
           .maybeSingle();
 
         if (statsError) {
@@ -125,13 +123,12 @@ const Dashboard = () => {
     const fetchUserStats = async () => {
       if (!discordId) return;
 
-      const numericId = Number(discordId);
-      console.log('Fetching stats for numeric ID:', numericId); // Debug log
+      console.log('Fetching stats for Discord ID:', discordId); // Debug log
 
       const { data: stats, error } = await supabase
         .from('user_stats')
         .select('*')
-        .eq('user_id', numericId)
+        .eq('user_id', discordId)
         .maybeSingle();
 
       if (error) {
@@ -143,7 +140,7 @@ const Dashboard = () => {
         console.log('Periodic stats update:', stats); // Debug log
         setUserStats(stats);
       } else {
-        console.log('No stats found in periodic update for:', numericId);
+        console.log('No stats found in periodic update for:', discordId);
       }
     };
 
@@ -219,14 +216,14 @@ const Dashboard = () => {
       setIsRunning(sessionTime > 0);
     }
 
-    // Fetch updated user stats using the discord_id from state
-    const numericId = Number(discordId);
+    // Use discord_id directly as string
+    console.log('Fetching updated stats for Discord ID:', discordId); // Debug log
     
-    // Fetch updated user stats
+    // Fetch updated user stats using discord_id as string
     const { data: stats, error: statsError } = await supabase
       .from('user_stats')
       .select('*')
-      .eq('user_id', numericId)
+      .eq('user_id', discordId)
       .maybeSingle();
 
     if (statsError) {
