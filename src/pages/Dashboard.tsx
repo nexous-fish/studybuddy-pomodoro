@@ -1,4 +1,3 @@
-
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -22,10 +21,15 @@ const Dashboard = () => {
   // Check authentication and get profile
   useEffect(() => {
     const checkAuth = async () => {
+      console.log('Starting checkAuth...'); // Debug log
+      
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('Session:', session); // Debug log
+      
       setSession(session);
       
       if (!session) {
+        console.log('No session, redirecting to index'); // Debug log
         navigate('/');
         return;
       }
@@ -42,11 +46,11 @@ const Dashboard = () => {
         return;
       }
 
-      console.log('Profile:', profile); // Debug log
+      console.log('Profile data:', profile); // Debug log
 
       if (profile?.discord_id) {
         setDiscordId(profile.discord_id);
-        console.log('Discord ID:', profile.discord_id); // Debug log
+        console.log('Setting Discord ID:', profile.discord_id); // Debug log
         
         // Check if user is in an active room
         const { data: room } = await supabase
@@ -54,7 +58,10 @@ const Dashboard = () => {
           .select('*')
           .maybeSingle();
 
+        console.log('Room data:', room); // Debug log
+
         if (!room || !room.user_data || !Object.keys(room.user_data).includes(profile.discord_id)) {
+          console.log('User not in room, redirecting to index'); // Debug log
           navigate('/');
           return;
         }
@@ -69,6 +76,7 @@ const Dashboard = () => {
 
         // Convert discord_id to number before querying user_stats
         const numericId = Number(profile.discord_id);
+        console.log('Numeric Discord ID for query:', numericId); // Debug log
         
         // Fetch user stats using numeric discord_id
         const { data: stats, error: statsError } = await supabase
@@ -82,13 +90,16 @@ const Dashboard = () => {
           return;
         }
 
+        console.log('Raw stats data:', stats); // Debug log
+
         if (stats) {
-          console.log('Found user stats:', stats); // Debug log
+          console.log('Setting user stats:', stats); // Debug log
           setUserStats(stats);
         } else {
           console.log('No stats found for discord_id:', profile.discord_id);
         }
       } else {
+        console.log('No Discord ID found, redirecting to index'); // Debug log
         navigate('/');
         return;
       }
@@ -107,6 +118,40 @@ const Dashboard = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  // Fetch user stats periodically
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      if (!discordId) return;
+
+      const numericId = Number(discordId);
+      console.log('Fetching stats for numeric ID:', numericId); // Debug log
+
+      const { data: stats, error } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('user_id', numericId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching user stats:', error);
+        return;
+      }
+
+      if (stats) {
+        console.log('Periodic stats update:', stats); // Debug log
+        setUserStats(stats);
+      } else {
+        console.log('No stats found in periodic update for:', numericId);
+      }
+    };
+
+    // Fetch initially and then every 30 seconds
+    fetchUserStats();
+    const interval = setInterval(fetchUserStats, 30000);
+
+    return () => clearInterval(interval);
+  }, [discordId]);
 
   // Calculate break timer
   const calculateBreakTimer = (room: any) => {
@@ -265,29 +310,6 @@ const Dashboard = () => {
     };
   }, [isRunning, time, toast, pomodoroRoom]);
 
-  // Fetch user stats
-  useEffect(() => {
-    const fetchUserStats = async () => {
-      if (!session) return;
-
-      const { data: stats, error } = await supabase
-        .from('user_stats')
-        .select('*')
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching user stats:', error);
-        return;
-      }
-
-      if (stats) {
-        setUserStats(stats);
-      }
-    };
-
-    fetchUserStats();
-  }, [session]);
-
   // Calculate weekly progress percentage
   const weeklyProgressPercentage = userStats ? 
     ((userStats.weekly_voice_time - userStats.previous_weekly_voice_time) / 
@@ -303,19 +325,19 @@ const Dashboard = () => {
   const chartData = userStats ? [
     { 
       name: 'Previous Week',
-      hours: userStats.previous_weekly_voice_time / 3600
+      hours: (userStats.previous_weekly_voice_time || 0) / 3600
     },
     { 
       name: 'Current Week',
-      hours: userStats.weekly_voice_time / 3600
+      hours: (userStats.weekly_voice_time || 0) / 3600
     },
     { 
       name: 'Today',
-      hours: userStats.daily_voice_time / 3600
+      hours: (userStats.daily_voice_time || 0) / 3600
     },
     { 
       name: 'Total',
-      hours: userStats.total_voice_time / 3600
+      hours: (userStats.total_voice_time || 0) / 3600
     }
   ] : [];
 
