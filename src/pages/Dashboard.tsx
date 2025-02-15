@@ -59,16 +59,20 @@ const Dashboard = () => {
         }));
         setConnectedUsers(formattedUsers);
 
-        // Fetch user stats using discord_id
-        const { data: stats } = await supabase
-          .from('user_stats')
-          .select('*')
-          .eq('user_id', profile.discord_id)
-          .maybeSingle();
+        // Convert discord_id to number before querying user_stats
+        const numericDiscordId = profile.discord_id ? BigInt(profile.discord_id) : null;
+        if (numericDiscordId) {
+          // Fetch user stats using discord_id as number
+          const { data: stats } = await supabase
+            .from('user_stats')
+            .select('*')
+            .eq('user_id', numericDiscordId)
+            .maybeSingle();
 
-        if (stats) {
-          console.log('User stats:', stats); // Debug log
-          setUserStats(stats);
+          if (stats) {
+            console.log('User stats:', stats); // Debug log
+            setUserStats(stats);
+          }
         }
       } else {
         navigate('/');
@@ -155,16 +159,20 @@ const Dashboard = () => {
       setIsRunning(sessionTime > 0);
     }
 
-    // Fetch updated user stats
-    const { data: stats } = await supabase
-      .from('user_stats')
-      .select('*')
-      .eq('user_id', discordId)
-      .maybeSingle();
+    // Convert discord_id to number before querying user_stats
+    const numericDiscordId = discordId ? BigInt(discordId) : null;
+    if (numericDiscordId) {
+      // Fetch updated user stats with numeric discord_id
+      const { data: stats } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('user_id', numericDiscordId)
+        .maybeSingle();
 
-    if (stats) {
-      console.log('Updated user stats:', stats); // Debug log
-      setUserStats(stats);
+      if (stats) {
+        console.log('Updated user stats:', stats); // Debug log
+        setUserStats(stats);
+      }
     }
   };
 
