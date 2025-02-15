@@ -67,11 +67,14 @@ const Dashboard = () => {
         }));
         setConnectedUsers(formattedUsers);
 
-        // Fetch user stats using string discord_id
+        // Convert discord_id to number before querying user_stats
+        const numericId = Number(profile.discord_id);
+        
+        // Fetch user stats using numeric discord_id
         const { data: stats, error: statsError } = await supabase
           .from('user_stats')
           .select('*')
-          .eq('user_id', profile.discord_id)
+          .eq('user_id', numericId)
           .maybeSingle();
 
         if (statsError) {
@@ -170,11 +173,14 @@ const Dashboard = () => {
       setIsRunning(sessionTime > 0);
     }
 
+    // Convert discord_id to number before querying user_stats
+    const numericId = Number(discordId);
+    
     // Fetch updated user stats
     const { data: stats, error: statsError } = await supabase
       .from('user_stats')
       .select('*')
-      .eq('user_id', discordId)
+      .eq('user_id', numericId)
       .maybeSingle();
 
     if (statsError) {
